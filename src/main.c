@@ -145,15 +145,28 @@ int parse_anon(void) {
 int parse_anon_lam(void) {
     int p = pos;
     term t={0};
-    t.param = parse_name();
-    if (!t.param) return 0;
+    const char *params[16];
+    int count=0;
+    while (1) {
+        t.param = parse_name();
+        int p2 = pos;
+        if (!t.param) {
+            pos = p2;
+            break;
+        }
+        params[count++] = t.param;
+    }
     if (!parse_str("=>")) return 0;
     t.body = parse_term();
     if (!t.body) return 0;
-    int id = alloc(0, LAM, t);
-    syms[id] = t.param;
-    locations[id] = p;
-    return id;
+    for (int i=count-1; i >= 0; --i) {
+        t.param = params[i];
+        int id = alloc(0, LAM, t);
+        syms[id] = t.param;
+        locations[id] = p;
+        t.body = id;
+    }
+    return t.body;
 }
 
 int parse_ffi(void) {
@@ -528,7 +541,11 @@ int infer(int id, int check) {
         exit(1);
     } else if (tags[id] & (LAM | PI)) {
         if (tags[id] == PI && check) {
-            if (!eq(check, 1)) assert(0);
+            if (!eq(check, 1)) {
+                print_location(id);
+                exit(69);
+                assert(0);
+            }
         }
         if (tags[id] == LAM && check) {
             if (tags[check] != PI) {
@@ -614,26 +631,6 @@ int infer(int id, int check) {
     }
 }
 
-static inline uint64_t read_cntvct(void)
-{
-    uint64_t v;
-    asm volatile("mrs %0, cntvct_el0" : "=r"(v));
-    return v;
-}
-
-static inline uint64_t read_cntfrq(void)
-{
-    uint64_t v;
-    asm volatile("mrs %0, cntfrq_el0" : "=r"(v));
-    return v;
-}
-
-static inline uint64_t elapsed_us(uint64_t start, uint64_t end)
-{
-    uint64_t freq = read_cntfrq();
-    return (end - start) / (freq / 1000000);
-}
-
 FILE *outfile;
 int codegen_counter=0;
 
@@ -648,7 +645,7 @@ void compile(int id)
 
     int body = id;
     while (tags[body] == LAM) {
-        params[pcount++] = ts[body].param;
+        params[pcount++] = syms[body] ?: ts[body].param;
         body = ts[body].body;
     }
 
@@ -671,7 +668,7 @@ void compile(int id)
         len += sprintf(buf + len, "    Coc coc;\n");
         codegen_counter++;
     } else {
-        len += sprintf(buf + len, "__attribute__((always_inline)) static inline void _%d(Coc coc) {\n", codegen_counter++);
+        len += sprintf(buf + len, "COCABI _%d(Coc coc) {\n", codegen_counter++);
         for (int i=0; i < pcount; ++i) {
             len += sprintf(buf + len, "    CocFunc %s = coc._[%d];\n", params[i], i);
         }
@@ -731,11 +728,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    uint64_t start = read_cntvct();
     int ty = infer(v, 0);
     v = fully_evaluate(v);
-    uint64_t end = read_cntvct();
-    printf("\n[Time]\n  %.2lf ms\n\n", (double)elapsed_us(start, end) / 1000.0);
 
     outfile = fopen("out.c", "w+");
     fprintf(outfile, "#include <stdlib.h>\n");

@@ -3,6 +3,6 @@
 set -xe
 
 clang src/main.c -o bin/coc \
-  -fsanitize=address \
-  -fsanitize=undefined \
-  -ggdb
+    -fsanitize=address \
+    -fsanitize=undefined \
+    -ggdb

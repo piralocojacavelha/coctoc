@@ -1,0 +1,58 @@
+World : Type;
+initial : World;
+
+Integer : Type;
+String : Type;
+Boolean : Type;
+
+Allowed : Type -> Type = 
+    A => 
+        (P : Type -> Type) ->
+        P Integer -> 
+        P String -> 
+        P Boolean ->
+        P A;
+
+ints_are_allowed : Allowed Integer = 
+    P i s b => i;
+
+strs_are_allowed : Allowed String =
+    P i s b => s;
+
+bools_are_allowed : Allowed Boolean = 
+    P i s b => b;
+
+print : 
+    (A : Type) -> 
+    A -> 
+    Allowed A -> 
+    World ->
+    World;
+
+42 : Integer;
+"hello" : String;
+true : Boolean;
+
+world := initial;
+
+world := print
+    Integer 
+    42
+    ints_are_allowed 
+    world;
+
+world := print 
+    String 
+    "hello"
+    strs_are_allowed 
+    world;
+
+world := print 
+    Boolean
+    true 
+    bools_are_allowed
+    world;
+
+world
+
+
